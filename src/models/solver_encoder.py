@@ -87,6 +87,8 @@ class Solver(object):
                         
             # Identity mapping loss
             x_identic, x_identic_psnt, code_real = self.G(x_real, emb_org, emb_org)
+            x_identic = x_identic.squeeze(1)
+            x_identic_psnt = x_identic_psnt.squeeze(1)
             g_loss_id = F.mse_loss(x_real, x_identic)   
             g_loss_id_psnt = F.mse_loss(x_real, x_identic_psnt)   
             

@@ -3,7 +3,7 @@ Generate speaker embeddings and metadata for training
 """
 import os
 import pickle
-from model_bl import D_VECTOR
+from models.model_bl import D_VECTOR
 from collections import OrderedDict
 import numpy as np
 import torch
