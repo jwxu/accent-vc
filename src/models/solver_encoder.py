@@ -1,4 +1,4 @@
-from model_vc import Generator
+from src.models.model_vc import Generator
 import torch
 import torch.nn.functional as F
 import time
@@ -49,8 +49,7 @@ class Solver(object):
     
     #=====================================================================================================================================#
     
-    
-                
+            
     def train(self):
         # Set data loader.
         data_loader = self.vcc_loader
