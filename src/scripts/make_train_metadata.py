@@ -9,6 +9,7 @@ import re
 
 import numpy as np
 import torch
+from tqdm import tqdm
 
 from src.models.model_bl import D_VECTOR
 
@@ -28,7 +29,7 @@ def get_arg_parse():
 
 
 def generate_metadata_files_v2(spectr_dir, metadata_dir, encoder_ckpt, config={}):
-    name_re = re.compile("^arctic_(\w)(\d{4})\.wav$")
+    name_re = re.compile("arctic_(\w)(\d{4})\.npy")
 
     input_dim = config.get("input_dim", 80)
     cell_dim = config.get("cell_dim", 768)
@@ -49,34 +50,36 @@ def generate_metadata_files_v2(spectr_dir, metadata_dir, encoder_ckpt, config={}
     C.load_state_dict(new_state_dict)
 
     speaker_map = defaultdict(dict)
-    for spectr_name in os.listdir(wav_dir):
+    for spectr_name in tqdm(os.listdir(spectr_dir), desc="Embedding Spectrogram Files"):
         spectr_path = os.path.join(spectr_dir, spectr_name)
-        name_match = name_re.match(spectr_name)
+        name_match = name_re.search(spectr_name)
         if not name_match:
+            print('No name match')
             continue
-        speaker_name = name_match.groups(1)
-        clip_number = name_match.groups(2)
+        speaker_name = name_match.group(1)
+        clip_number = name_match.group(2)
 
         # If you reach num_uttrs for a given speaker, skip
-        if len(speaker[speaker_name]['embeddings']) >= num_uttrs:
+        if 'embeddings' in speaker_map[speaker_name] and len(speaker_map[speaker_name]['embeddings']) >= num_uttrs:
             continue
 
         # If spectrogram is not long enough, skip
         spectrogram = np.load(spectr_path)
         if spectrogram.shape[0] < len_crop:
+            print(f'Len too short: {spectrogram.shape[0]}')
             continue
 
         left = np.random.randint(0, spectrogram.shape[0] - len_crop)
         mel_spectrogram = torch.from_numpy(spectrogram[np.newaxis, left:left+len_crop, :]).cuda()
         embedding = C(mel_spectrogram)
 
-        if not speaker[speaker_name]['embeddings']:
-            speaker[speaker_name]['embeddings'] = []
-        speaker[speaker_name]['embeddings'].append(embedding)
+        if 'embeddings' not in speaker_map[speaker_name]:
+            speaker_map[speaker_name]['embeddings'] = []
+        speaker_map[speaker_name]['embeddings'].append(embedding.detach().squeeze().cpu().numpy())
 
-        if not speaker[speaker_name]['files']:
-            speaker[speaker_name]['files'] = []
-        speaker[speaker_name]['files'].append(spectr_path)
+        if 'files' not in speaker_map[speaker_name]:
+            speaker_map[speaker_name]['files'] = []
+        speaker_map[speaker_name]['files'].append(spectr_path)
 
     speakers = []
     for speaker, speaker_data in speaker_map.items():

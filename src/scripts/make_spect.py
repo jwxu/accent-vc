@@ -1,12 +1,14 @@
+import argparse
 import os
 import pickle
-import argparse
+
+from librosa.filters import mel
 import numpy as np
-import soundfile as sf
+from numpy.random import RandomState
 from scipy import signal
 from scipy.signal import get_window
-from librosa.filters import mel
-from numpy.random import RandomState
+import soundfile as sf
+from tqdm import tqdm
 
 
 def get_arg_parse():
@@ -57,13 +59,18 @@ def generate_spectrogram_v2(wav_dir, out_dir, config={}):
     f_max = config.get('f_max', 7600)
     n_mels = config.get('n_mels', 80)
 
-    mel_basis = mel(sr, n_fft, fmin=f_min, fmax=f_max, n_mels=n_mels).T
+    mel_basis = mel(sr=sr, n_fft=n_fft, fmin=f_min, fmax=f_max, n_mels=n_mels).T
     min_level = np.exp(-100 / 20 * np.log(10))
     b, a = butter_highpass(30, 16000, order=5)
 
-    for wav_name in os.listdir(wav_dir):
+    for wav_name in tqdm(os.listdir(wav_dir), desc="Converting WAV to Spectrogram"):
         wav_path = os.path.join(wav_dir, wav_name)
-        out_path = os.path.join(out_dir, wav_name.replace('wav', ''))
+        out_path = os.path.join(out_dir, wav_name.replace('.wav', ''))
+        
+        # If the output spectrogram already exists, skip
+        if os.path.isfile(out_path + '.npy'):
+            continue
+
         wav, file_sr = sf.read(wav_path)
         # Remove drifting noise
         augmented_wav = signal.filtfilt(b, a, wav)
