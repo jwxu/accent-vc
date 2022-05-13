@@ -6,6 +6,7 @@ import time
 import datetime
 import wandb
 import json
+from tqdm import tqdm
 
 
 class Solver(object):
@@ -46,7 +47,7 @@ class Solver(object):
             
     def build_model(self):
         
-        self.G = Generator(self.dim_neck, self.dim_emb, self.dim_pre, self.freq)        
+        self.G = Generator(self.dim_neck, self.dim_emb, self.dim_pre, self.freq)      
         
         self.g_optimizer = torch.optim.Adam(self.G.parameters(), 0.0001)
         
@@ -88,7 +89,7 @@ class Solver(object):
         # Start training.
         print('Start training...')
         start_time = time.time()
-        for i in range(self.num_iters):
+        for i in tqdm(range(self.num_iters)):
 
             # =================================================================================== #
             #                             1. Preprocess input data                                #
@@ -155,13 +156,24 @@ class Solver(object):
                 if self.config.wandb:
                     wandb.log(log_dict, i)
 
-        checkpoint = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+        # Log final results
+        et = time.time() - start_time
+        et = str(datetime.timedelta(seconds=et))[:-7]
+        log = "Elapsed [{}], Iteration [{}/{}]".format(et, i+1, self.num_iters)
+        for tag in keys:
+            log += ", {}: {:.4f}".format(tag, loss[tag])
+        print(log)
+
+        # Save model
+        checkpoint = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
         if not os.path.exists(self.config.checkpoints_dir):
             os.makedirs(self.config.checkpoints_dir)
         checkpoint_path = os.path.join(self.config.checkpoints_dir, checkpoint)
         os.makedirs(checkpoint_path)
         
-        torch.save({'model': self.G.state_dict()}, os.path.join(checkpoint_path, 'accentvc.ckpt'))
+        checkpoint_path = os.path.join(checkpoint_path, 'accentvc.ckpt')
+        print("Saving checkpoint to ", checkpoint_path)
+        torch.save({'model': self.G.state_dict()}, checkpoint_path)
                 
 
     
