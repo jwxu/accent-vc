@@ -26,3 +26,7 @@ Demo Train: From root accent-vc directory, run `sh bash_scripts/run_demo_train.s
 - This first creates all melspectrogram for all the audio files
 - Then creates a train metadata file of the speaker, the speaker embedding (runs a pretrained speaker encoder), and the speaker melspectrogram filepaths
 - Then trains
+
+## wandb Logging
+Create a json file with the content `{"key": <YOUR_WANDB_API_KEY>, "entity": <YOUR_WANDB_USERNAME>}`
+Use the flags `--wandb <PROJECT_NAME>` and `--wandb_json <YOUR_WANDB.JSON_FILEPATH>`
