@@ -1,6 +1,9 @@
 checkpoints/*
 *.ckpt
 *.pth
+wandb/*
+.DS_Store
+wandb.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

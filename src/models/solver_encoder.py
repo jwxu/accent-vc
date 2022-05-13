@@ -1,14 +1,19 @@
+import os
 from src.models.model_vc import Generator
 import torch
 import torch.nn.functional as F
 import time
 import datetime
+import wandb
+import json
 
 
 class Solver(object):
 
     def __init__(self, vcc_loader, config):
         """Initialize configurations."""
+
+        self.config = config
 
         # Data loader.
         self.vcc_loader = vcc_loader
@@ -29,9 +34,15 @@ class Solver(object):
         self.device = torch.device('cuda:0' if self.use_cuda else 'cpu')
         self.log_step = config.log_step
 
+        # Use pretrained checkpoint
+        self.checkpoint = config.load_ckpt
+
         # Build the model and tensorboard.
         self.build_model()
 
+        if config.wandb:
+            self.setup_logging()
+        
             
     def build_model(self):
         
@@ -41,10 +52,27 @@ class Solver(object):
         
         self.G.to(self.device)
         
+        if self.checkpoint:
+            print("Loading checkpoint...")
+            g_checkpoint = torch.load(self.checkpoint, map_location=torch.device(self.device))
+            self.G.load_state_dict(g_checkpoint['model'])
+        
 
     def reset_grad(self):
         """Reset the gradient buffers."""
         self.g_optimizer.zero_grad()
+    
+
+    def setup_logging(self):
+        # Set up wandb
+        with open(self.config.wandb_json, 'r') as f:
+            json_file = json.load(f)
+            login_key = json_file['key']
+            entity = json_file['entity']
+        wandb.login(key=login_key)
+        wandb.init(project=self.config.wandb, entity=entity)
+        wandb.config.update(self.config)
+        wandb.watch(self.G)
       
     
     #=====================================================================================================================================#
@@ -117,9 +145,23 @@ class Solver(object):
                 et = time.time() - start_time
                 et = str(datetime.timedelta(seconds=et))[:-7]
                 log = "Elapsed [{}], Iteration [{}/{}]".format(et, i+1, self.num_iters)
+
+                log_dict = {}
                 for tag in keys:
                     log += ", {}: {:.4f}".format(tag, loss[tag])
+                    log_dict[tag] = loss[tag]
                 print(log)
+
+                if self.config.wandb:
+                    wandb.log(log_dict, i)
+
+        checkpoint = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+        if not os.path.exists(self.config.checkpoints_dir):
+            os.makedirs(self.config.checkpoints_dir)
+        checkpoint_path = os.path.join(self.config.checkpoints_dir, checkpoint)
+        os.makedirs(checkpoint_path)
+        
+        torch.save({'model': self.G.state_dict()}, os.path.join(checkpoint_path, 'accentvc.ckpt'))
                 
 
     

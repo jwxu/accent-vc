@@ -26,6 +26,10 @@ def get_arg_parse():
     
     # Miscellaneous.
     parser.add_argument('--log_step', type=int, default=10)
+    parser.add_argument('--load_ckpt', type=str, default=None, help='Load from pretrained checkpoint')
+    parser.add_argument('--wandb', default=None, type=str, help="Wandb project name")
+    parser.add_argument('--wandb_json', default=None, type=str, 
+                        help="File path to wandb config json file")
 
     args = parser.parse_args()
     return args
