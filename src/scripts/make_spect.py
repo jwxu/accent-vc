@@ -44,9 +44,39 @@ def pySTFT(x, fft_length=1024, hop_length=256):
     result = np.fft.rfft(fft_window * result, n=fft_length).T
     
     return np.abs(result)    
-    
 
-def generate_spectrogram(rootDir, targetDir):
+
+def generate_spectrogram_v2(wav_dir, out_dir, config={}):
+    """ Aux function to convert WAV files to spectrograms (primarily
+    for the L2-Arctic dataset)
+    """
+    # TODO: Might need to adjust the min/max for L2-Arctic
+    sr = config.get('sr', 16000)
+    n_fft = config.get('n_fft', 1024)
+    f_min = config.get('f_min', 90)
+    f_max = config.get('f_max', 7600)
+    n_mels = config.get('n_mels', 80)
+
+    mel_basis = mel(sr, n_fft, fmin=f_min, fmax=f_max, n_mels=n_mels).T
+    min_level = np.exp(-100 / 20 * np.log(10))
+    b, a = butter_highpass(30, 16000, order=5)
+
+    for wav_name in os.listdir(wav_dir):
+        wav_path = os.path.join(wav_dir, wav_name)
+        out_path = os.path.join(out_dir, wav_name.replace('wav', ''))
+        wav, file_sr = sf.read(wav_path)
+        # Remove drifting noise
+        augmented_wav = signal.filtfilt(b, a, wav)
+        # Skip adding random noise
+        spectr = pySTFT(augmented_wav).T
+        # Convert to MEL and normalize
+        mel_spectr = np.dot(spectr, mel_basis)
+        augmented_mel_spectr = 20 * np.log10(np.maximum(min_level, mel_spectr)) - 16
+        augmented_mel_spectr = np.clip((augmented_mel_spectr + 100) / 100, 0, 1)
+        np.save(out_path, augmented_mel_spectr.astype(np.float32), allow_pickle=False)
+
+
+def generate_spectrogram(rootDir, targetDir, config={}):
     mel_basis = mel(16000, 1024, fmin=90, fmax=7600, n_mels=80).T
     min_level = np.exp(-100 / 20 * np.log(10))
     b, a = butter_highpass(30, 16000, order=5)

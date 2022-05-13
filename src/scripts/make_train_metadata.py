@@ -1,13 +1,16 @@
 """
 Generate speaker embeddings and metadata for training
 """
+import argparse
+from collections import defaultdict, OrderedDict
 import os
 import pickle
-import argparse
-from src.models.model_bl import D_VECTOR
-from collections import OrderedDict
+import re
+
 import numpy as np
 import torch
+
+from src.models.model_bl import D_VECTOR
 
 
 def get_arg_parse():
@@ -22,6 +25,67 @@ def get_arg_parse():
 
     args = parser.parse_args()
     return args
+
+
+def generate_metadata_files_v2(spectr_dir, metadata_dir, encoder_ckpt, config={}):
+    name_re = re.compile("^arctic_(\w)(\d{4})\.wav$")
+
+    input_dim = config.get("input_dim", 80)
+    cell_dim = config.get("cell_dim", 768)
+    embed_dim = config.get("embed_dim", 256)
+    len_crop = config.get("len_crop", 128)
+    num_uttrs = config.get("num_uttrs", 10)     # per speaker
+
+    metadata_path = os.path.join(metadata_dir, f'{num_uttrs}_{len_crop}_train.pkl')
+
+    # Currently only one type of encoder being used, but if we want to
+    # try with other models, we can abstract this function out
+    C = D_VECTOR(dim_input=input_dim, dim_cell=cell_dim, dim_emb=embed_dim).eval().cuda()
+    c_checkpoint = torch.load(encoder_ckpt)
+    new_state_dict = OrderedDict()
+    for key, val in c_checkpoint['model_b'].items():
+        new_key = key[7:]
+        new_state_dict[new_key] = val
+    C.load_state_dict(new_state_dict)
+
+    speaker_map = defaultdict(dict)
+    for spectr_name in os.listdir(wav_dir):
+        spectr_path = os.path.join(spectr_dir, spectr_name)
+        name_match = name_re.match(spectr_name)
+        if not name_match:
+            continue
+        speaker_name = name_match.groups(1)
+        clip_number = name_match.groups(2)
+
+        # If you reach num_uttrs for a given speaker, skip
+        if len(speaker[speaker_name]['embeddings']) >= num_uttrs:
+            continue
+
+        # If spectrogram is not long enough, skip
+        spectrogram = np.load(spectr_path)
+        if spectrogram.shape[0] < len_crop:
+            continue
+
+        left = np.random.randint(0, spectrogram.shape[0] - len_crop)
+        mel_spectrogram = torch.from_numpy(spectrogram[np.newaxis, left:left+len_crop, :]).cuda()
+        embedding = C(mel_spectrogram)
+
+        if not speaker[speaker_name]['embeddings']:
+            speaker[speaker_name]['embeddings'] = []
+        speaker[speaker_name]['embeddings'].append(embedding)
+
+        if not speaker[speaker_name]['files']:
+            speaker[speaker_name]['files'] = []
+        speaker[speaker_name]['files'].append(spectr_path)
+
+    speakers = []
+    for speaker, speaker_data in speaker_map.items():
+        embed_mean = np.mean(speaker_data['embeddings'], axis=0)
+        utterances = [speaker, embed_mean, *speaker_data['files']]
+        speakers.append(utterances)
+
+    with open(metadata_path, 'wb') as f:
+        pickle.dump(speakers, f)
 
 
 def generate_metadata_files(rootDir, encoder_ckpt):
