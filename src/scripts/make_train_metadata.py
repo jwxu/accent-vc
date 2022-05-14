@@ -38,6 +38,7 @@ def generate_metadata_files_v2(spectr_dir, metadata_dir, encoder_ckpt, config={}
     num_uttrs = config.get("num_uttrs", 10)     # per speaker
 
     metadata_path = os.path.join(metadata_dir, f'{num_uttrs}_{len_crop}_train.pkl')
+    partial_spectr_dir = os.path.basename(os.path.normpath(spectr_dir))
 
     # Currently only one type of encoder being used, but if we want to
     # try with other models, we can abstract this function out
@@ -52,6 +53,7 @@ def generate_metadata_files_v2(spectr_dir, metadata_dir, encoder_ckpt, config={}
     speaker_map = defaultdict(dict)
     for spectr_name in tqdm(os.listdir(spectr_dir), desc="Embedding Spectrogram Files"):
         spectr_path = os.path.join(spectr_dir, spectr_name)
+        partial_spectr_path = os.path.join(partial_spectr_dir, spectr_name)
         name_match = name_re.search(spectr_name)
         if not name_match:
             print('No name match')
@@ -79,7 +81,7 @@ def generate_metadata_files_v2(spectr_dir, metadata_dir, encoder_ckpt, config={}
 
         if 'files' not in speaker_map[speaker_name]:
             speaker_map[speaker_name]['files'] = []
-        speaker_map[speaker_name]['files'].append(spectr_path)
+        speaker_map[speaker_name]['files'].append(partial_spectr_path)
 
     speakers = []
     for speaker, speaker_data in speaker_map.items():
