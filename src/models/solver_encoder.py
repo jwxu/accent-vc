@@ -89,7 +89,7 @@ class Solver(object):
         # Start training.
         print('Start training...')
         start_time = time.time()
-        for i in tqdm(range(self.num_iters)):
+        for i in range(self.num_iters):
 
             # =================================================================================== #
             #                             1. Preprocess input data                                #
