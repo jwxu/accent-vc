@@ -14,6 +14,7 @@ def get_arg_parse():
     parser = argparse.ArgumentParser()
     parser.add_argument('--arctic_data_name', type=str, required=True,
                 default="ABA", help="Name of the speaker accent to use ABA,ASI,BWC,etc.")
+    parser.add_argument('--num_utterances', type=int, default=20, help="Number of utterances to use for train")
     parser.add_argument('--encoder_ckpt', type=str, required=False,
                 default="dataset/trained_models/3000000-BL.ckpt", help="Path to embedding encoder for MEL spectogram")
     args = parser.parse_args()
@@ -67,6 +68,7 @@ def _download_gdrive_file(url, name, save_dir, unzip=False):
 
 def process_arctic_data(args):
     arctic_data_name = args.arctic_data_name
+    num_utterances = args.num_utterances
     arctic_dir = os.path.join('dataset', arctic_data_name)
     encoder_path = args.encoder_ckpt
 
@@ -100,8 +102,8 @@ def process_arctic_data(args):
     if not os.path.isdir(spectr_dir):
         os.makedirs(spectr_dir)
 
-    # Create a metadata dir
-    autovc_meta_dir = os.path.join(arctic_dir, "autovc_metadata")
+    # To work with default AutoVC code, put the train.pkl file at top level data dir
+    autovc_meta_dir = arctic_dir
     if not os.path.isdir(autovc_meta_dir):
         os.makedirs(autovc_meta_dir)
 
@@ -111,7 +113,8 @@ def process_arctic_data(args):
     generate_spectrogram_v2(wav_dir, spectr_dir, {'sr': 44100})
 
     # Generate metadata files from spectrograms (train)
-    generate_metadata_files_v2(spectr_dir, autovc_meta_dir, encoder_path, {'num_uttrs': 20})
+    metadata_config = {'num_uttrs': num_utterances}
+    generate_metadata_files_v2(spectr_dir, autovc_meta_dir, encoder_path, metadata_config)
 
 
 if __name__ == "__main__":
