@@ -26,7 +26,7 @@ def get_arg_parse():
     parser.add_argument('--len_crop', type=int, default=128, help='dataloader output sequence length')
     
     # Miscellaneous.
-    parser.add_argument('--log_step', type=int, default=10)
+    parser.add_argument('--log_step', type=int, default=100)
     parser.add_argument('--load_ckpt', type=str, default=None, help='Load from pretrained checkpoint')
     parser.add_argument('--checkpoints_dir', type=str, default="checkpoints", help='Directory to save checkpoints')
     parser.add_argument('--wandb', default=None, type=str, help="Wandb project name")
