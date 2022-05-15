@@ -3,8 +3,10 @@ Generate speaker embeddings and metadata for training
 """
 import argparse
 from collections import defaultdict, OrderedDict
+import math
 import os
 import pickle
+import random
 import re
 
 import numpy as np
@@ -13,6 +15,7 @@ from tqdm import tqdm
 
 from src.models.model_bl import D_VECTOR
 
+random.seed(12345)
 
 def get_arg_parse():
     """
@@ -28,16 +31,22 @@ def get_arg_parse():
     return args
 
 
-def generate_metadata_files_v2(spectr_dir, metadata_dir, encoder_ckpt, config={}):
+def generate_metadata_files_v2(speaker_id, spectr_dir, metadata_dir, encoder_ckpt, config={}):
     name_re = re.compile("arctic_(\w)(\d{4})\.npy")
 
     input_dim = config.get("input_dim", 80)
     cell_dim = config.get("cell_dim", 768)
     embed_dim = config.get("embed_dim", 256)
     len_crop = config.get("len_crop", 128)
-    num_uttrs = config.get("num_uttrs", 10)     # per speaker
+    num_uttrs = config.get("num_uttrs", 10)
+    train_test_ratio = config.get("train_test_ratio")
 
-    metadata_path = os.path.join(metadata_dir, f'{num_uttrs}_{len_crop}_train.pkl')
+    # If you specify a train_test_ratio, then no limit on num_uttrs
+    if train_test_ratio:
+        num_uttrs = math.inf
+
+    train_metadata_path = os.path.join(metadata_dir, 'train.pkl')
+    test_metadata_path = os.path.join(metadata_dir, 'test.pkl')
     partial_spectr_dir = os.path.basename(os.path.normpath(spectr_dir))
 
     # Currently only one type of encoder being used, but if we want to
@@ -50,8 +59,16 @@ def generate_metadata_files_v2(spectr_dir, metadata_dir, encoder_ckpt, config={}
         new_state_dict[new_key] = val
     C.load_state_dict(new_state_dict)
 
-    speaker_map = defaultdict(dict)
+    # Divide spectrograms into train and test
+    train_embedings, train_files = [], []
+    test_embeddings, test_files = [], []
     for spectr_name in tqdm(os.listdir(spectr_dir), desc="Embedding Spectrogram Files"):
+        if random.choice([True, False], 2, p=[train_test_ratio, 1-train_test_ratio]):
+            embeddings = train_embedings
+            files = train_files
+        else:
+            embeddings = test_embedings
+            files = test_files
         spectr_path = os.path.join(spectr_dir, spectr_name)
         partial_spectr_path = os.path.join(partial_spectr_dir, spectr_name)
         name_match = name_re.search(spectr_name)
@@ -62,7 +79,7 @@ def generate_metadata_files_v2(spectr_dir, metadata_dir, encoder_ckpt, config={}
         clip_number = name_match.group(2)
 
         # If you reach num_uttrs for a given speaker, skip
-        if 'embeddings' in speaker_map[speaker_name] and len(speaker_map[speaker_name]['embeddings']) >= num_uttrs:
+        if len(embeddings) >= num_uttrs:
             continue
 
         # If spectrogram is not long enough, skip
@@ -74,23 +91,17 @@ def generate_metadata_files_v2(spectr_dir, metadata_dir, encoder_ckpt, config={}
         left = np.random.randint(0, spectrogram.shape[0] - len_crop)
         mel_spectrogram = torch.from_numpy(spectrogram[np.newaxis, left:left+len_crop, :]).cuda()
         embedding = C(mel_spectrogram)
+        embeddings.append(embedding.detach().squeeze().cpu().numpy())
+        files.append(partial_spectr_path)
 
-        if 'embeddings' not in speaker_map[speaker_name]:
-            speaker_map[speaker_name]['embeddings'] = []
-        speaker_map[speaker_name]['embeddings'].append(embedding.detach().squeeze().cpu().numpy())
+    # Each L2-Arctic file only has one speaker
+    train = [[speaker_id, np.mean(train_embedings, axis=0), *train_files]]
+    test = [[speaker_id, np.mean(test_embeddings, axis=0), *test_files]]
 
-        if 'files' not in speaker_map[speaker_name]:
-            speaker_map[speaker_name]['files'] = []
-        speaker_map[speaker_name]['files'].append(partial_spectr_path)
-
-    speakers = []
-    for speaker, speaker_data in speaker_map.items():
-        embed_mean = np.mean(speaker_data['embeddings'], axis=0)
-        utterances = [speaker, embed_mean, *speaker_data['files']]
-        speakers.append(utterances)
-
-    with open(metadata_path, 'wb') as f:
-        pickle.dump(speakers, f)
+    with open(train_metadata_path, 'wb') as f:
+        pickle.dump(train, f)
+    with open(test_metadata_path, 'wb') as f:
+        pickle.dump(test, f)
 
 
 def generate_metadata_files(rootDir, encoder_ckpt):

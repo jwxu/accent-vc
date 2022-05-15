@@ -114,7 +114,7 @@ def process_arctic_data(args):
 
     # Generate metadata files from spectrograms (train)
     metadata_config = {'num_uttrs': num_utterances}
-    generate_metadata_files_v2(spectr_dir, autovc_meta_dir, encoder_path, metadata_config)
+    generate_metadata_files_v2(arctic_data_name, spectr_dir, autovc_meta_dir, encoder_path, metadata_config)
 
 
 if __name__ == "__main__":
