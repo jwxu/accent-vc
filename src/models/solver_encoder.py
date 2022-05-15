@@ -176,7 +176,3 @@ class Solver(object):
         torch.save({'model': self.G.state_dict()}, checkpoint_path)
                 
 
-    
-    
-
-    

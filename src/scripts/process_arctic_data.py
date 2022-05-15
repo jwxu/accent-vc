@@ -14,13 +14,15 @@ def get_arg_parse():
     parser = argparse.ArgumentParser()
     parser.add_argument('--arctic_data_name', type=str, required=True,
                 default="ABA", help="Name of the speaker accent to use ABA,ASI,BWC,etc.")
+    parser.add_argument('--train_test_ratio', type=float, default=None,
+                help="Ratio of train to test (ex. 0.95). Specifying train_test_ratio will override num_utterances")
     parser.add_argument('--num_utterances', type=int, default=20, help="Number of utterances to use for train")
     parser.add_argument('--encoder_ckpt', type=str, required=False,
                 default="dataset/trained_models/3000000-BL.ckpt", help="Path to embedding encoder for MEL spectogram")
     args = parser.parse_args()
     return args
 
-def _get_arctic_data_map():
+def get_arctic_data_map():
     return {
         'ABA': 'https://drive.google.com/uc?export=download&id=1LibCPfV6ezlJDcmBQ7m0cE5m_3ge8lO2',
         'ASI': 'https://drive.google.com/uc?export=download&id=1nbKukx2ZuviIjZav5WNnJV5MMJY7BXeY',
@@ -68,30 +70,34 @@ def _download_gdrive_file(url, name, save_dir, unzip=False):
 
 def process_arctic_data(args):
     arctic_data_name = args.arctic_data_name
-    num_utterances = args.num_utterances
-    arctic_dir = os.path.join('dataset', arctic_data_name)
-    encoder_path = args.encoder_ckpt
+    arctic_dir = os.path.join('dataset/l2-arctic', arctic_data_name)
 
-    arctic_map = _get_arctic_data_map()
+    arctic_map = get_arctic_data_map()
     if arctic_data_name != 'all' and arctic_data_name not in arctic_map.keys():
         print(f"--arctic_data_name must equal 'all' or one of the following values: {arctic_map.keys()}")
         return
 
     # If the data does not exist, download and unzip it
-    if not os.path.isdir(arctic_dir):
-        if arctic_data_name == 'all':
-            for name, url in arctic_map.items():
-                f_path = _download_gdrive_file(url, f'{name}.zip', 'dataset', unzip=True)
-        else:
-            f_path = _download_gdrive_file(arctic_map[arctic_data_name], f'{arctic_data_name}.zip', 'dataset', unzip=True)
+    if arctic_data_name != 'all':
+        arctic_map = {arctic_data_name: arctic_map[arctic_data_name]}
 
+    for name, url in arctic_map.items():
+        arctic_dir = os.path.join('dataset/l2-arctic', name)
+        if not os.path.isdir(arctic_dir):
+            f_path = _download_gdrive_file(url, f'{name}.zip', 'dataset/l2-arctic', unzip=True)
+        _process_data(name, arctic_dir, args)
+
+
+def _process_data(arctic_data_name, arctic_dir, args):
+    num_utterances = args.num_utterances
+    train_test_ratio = args.train_test_ratio
+    encoder_path = args.encoder_ckpt
 
     # If the encoder does not exist, and the default is being used, download it
     if not os.path.isfile(encoder_path) and '3000000-BL.ckpt' in encoder_path:
         print(f"No encoder model found. Downloading encoder used by AutoVC from Google Drive")
         encoder_download_url = "https://drive.google.com/uc?export=download&id=1ORAeb4DlS_65WDkQN6LHx5dPyCM5PAVV"
         _download_gdrive_file(encoder_download_url, '3000000-BL.ckpt', os.path.dirname(encoder_path))
-
 
     # WAV dir comes with the Arctic data
     wav_dir = os.path.join(arctic_dir, "wav")
@@ -113,7 +119,7 @@ def process_arctic_data(args):
     generate_spectrogram_v2(wav_dir, spectr_dir, {'sr': 44100})
 
     # Generate metadata files from spectrograms (train)
-    metadata_config = {'num_uttrs': num_utterances}
+    metadata_config = {'num_uttrs': num_utterances, 'train_test_ratio': train_test_ratio}
     generate_metadata_files_v2(arctic_data_name, spectr_dir, autovc_meta_dir, encoder_path, metadata_config)
 
 
