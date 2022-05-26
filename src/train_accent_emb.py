@@ -1,6 +1,6 @@
 import os
 import argparse
-from src.models.solver_encoder import Solver
+from src.models.solver_accent_emb import AccentEmbSolver
 from src.data.data_loader import get_loader
 from torch.backends import cudnn
 
@@ -11,18 +11,13 @@ def get_arg_parse():
     """
     parser = argparse.ArgumentParser()
 
-    # Model configuration.
-    parser.add_argument('--lambda_cd', type=float, default=1, help='weight for hidden code loss')
-    parser.add_argument('--dim_neck', type=int, default=32)
-    parser.add_argument('--dim_emb', type=int, default=256)
-    parser.add_argument('--dim_pre', type=int, default=512)
-    parser.add_argument('--freq', type=int, default=32)
-    
     # Training configuration.
     parser.add_argument('--data_dir', type=str, default='dataset/spmel')
     parser.add_argument('--file_name', type=str, default='train.pkl', help='Name of .pkl metadata file to use for training')
-    parser.add_argument('--batch_size', type=int, default=2, help='mini-batch size')
-    parser.add_argument('--num_iters', type=int, default=1000000, help='number of total iterations')
+    parser.add_argument('--label_csv', type=str, default='dataset/speaker_to_accent_map.csv', help="Name of .csv file to map speaker to accent")
+    parser.add_argument('--batch_size', type=int, default=32, help='mini-batch size')
+    parser.add_argument('--epochs', type=int, default=50, help='number of total epochs')
+    parser.add_argument('--validation_freq', type=int, default=5, help='validate every n epochs')
     parser.add_argument('--len_crop', type=int, default=128, help='dataloader output sequence length')
     
     # Miscellaneous.
@@ -42,9 +37,15 @@ def main(config):
     cudnn.benchmark = True
 
     # Data loader.
-    vcc_loader = get_loader(root_dir=config.data_dir, dataset="utterances", batch_size=config.batch_size, len_crop=config.len_crop, file_name=config.file_name)
+    accent_data_train = get_loader(root_dir=config.data_dir, dataset="accents", batch_size=config.batch_size, len_crop=config.len_crop, file_name=config.file_name, mode="train", label_csv=config.label_csv)
+    print("Train Data: ", len(accent_data_train))
+
+    accent_data_val = None
+    if config.validation_freq > 0:
+        accent_data_val = get_loader(root_dir=config.data_dir, dataset="accents", batch_size=config.batch_size, len_crop=config.len_crop, file_name=config.file_name, mode="val", label_csv=config.label_csv)
+        print("Valdation Data: ", len(accent_data_train))
     
-    solver = Solver(vcc_loader, config)
+    solver = AccentEmbSolver(accent_data_train, config, accent_data_val)
 
     solver.train()
              
