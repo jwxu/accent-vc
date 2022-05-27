@@ -32,6 +32,7 @@ def get_arg_parse():
 
 
 def generate_metadata_files_v2(speaker_id, spectr_dir, metadata_dir, encoder_ckpt, config={}):
+    print(f"Generating metadata for {speaker_id}")
     name_re = re.compile("arctic_(\w)(\d{4})\.npy")
 
     input_dim = config.get("input_dim", 80)
@@ -71,6 +72,7 @@ def generate_metadata_files_v2(speaker_id, spectr_dir, metadata_dir, encoder_ckp
     for subset in data:
         dataset_type, spectr_file_list = subset
         embeddings, files = [], []
+        aux_paths, spectrogram_list = [], []
         for spectr_name in tqdm(spectr_file_list, desc=f"Embedding {dataset_type} spectrograms"):
             spectr_path = os.path.join(spectr_dir, spectr_name)
             partial_spectr_path = os.path.join(partial_spectr_dir, spectr_name)
@@ -89,12 +91,14 @@ def generate_metadata_files_v2(speaker_id, spectr_dir, metadata_dir, encoder_ckp
             embedding = C(mel_spectrogram)
             embeddings.append(embedding.detach().squeeze().cpu().numpy())
             if dataset_type == "test":
+                spectrogram_list.append(spectrogram)
                 files.append(embedding.detach().squeeze().cpu().numpy())
+                aux_paths.append(partial_spectr_path)
             else:
                 files.append(partial_spectr_path)
 
         if dataset_type == "test":
-            speaker_data = [[speaker_id, np.mean(embeddings, axis=0), files]]
+            speaker_data = [[speaker_id, np.mean(embeddings, axis=0), spectrogram_list]]
         else:
             speaker_data = [[speaker_id, np.mean(embeddings, axis=0), *files]]
         metadata_path = os.path.join(metadata_dir, f'{dataset_type}.pkl')
