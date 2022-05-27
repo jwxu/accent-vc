@@ -4,6 +4,7 @@ import numpy as np
 import pickle 
 import os   
 import csv  
+import random
 
 
 class Accents(data.Dataset):
@@ -24,6 +25,8 @@ class Accents(data.Dataset):
         meta = pickle.load(open(metaname, "rb"))
                     
         self.train_dataset = self.load_data(meta)
+        random.shuffle(self.train_dataset)
+        
         self.num_tokens = len(self.train_dataset)
         print("Number of " + mode + " samples: ", self.num_tokens)
 
