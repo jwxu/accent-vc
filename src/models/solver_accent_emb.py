@@ -7,7 +7,7 @@ import wandb
 import json
 from collections import defaultdict, OrderedDict
 
-from src.models.model_bl import D_VECTOR
+from src.models.model_bl import D_ACCENT_VECTOR
 from src.utils.eval import get_accuracy
 
 
@@ -45,7 +45,7 @@ class AccentEmbSolver(object):
         """
         Build accent embedding model
         """
-        self.model = D_VECTOR(dim_input=80, dim_cell=768, dim_emb=256, label_dim=6, classification=True)
+        self.model = D_ACCENT_VECTOR(dim_input=80, dim_cell=768, dim_emb=256, label_dim=6, classification=True)
         
         if self.checkpoint:
             print("Loading checkpoint...")

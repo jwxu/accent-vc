@@ -23,15 +23,16 @@ def combine_train_data(args):
     # Verify that all list items are in 
     assert all(name in arctic_map for name in data_files)
 
-    for dataset_type in ['train', 'test']:
+    for dataset_type in ['train', 'test', 'val']:
         combined = []
         for name in tqdm(data_files):
             train_fp = os.path.join('dataset/l2-arctic', name, f'{dataset_type}.pkl')
+            print(train_fp)
             assert os.path.isfile(train_fp)
             with open(train_fp, 'rb') as f:
                 train_data = pickle.load(f)
             # Update all file paths to include the arctic data dir it belongs to
-            if dataset_type == 'train':
+            if dataset_type != 'test':
                 train_data[0][2:] = [os.path.join(name, path) for path in train_data[0][2:]]
             combined.append(train_data[0])
         with open(os.path.join('dataset/l2-arctic', f'{dataset_type}.pkl'), 'wb') as f:

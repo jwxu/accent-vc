@@ -40,7 +40,7 @@ def generate_metadata_files_v2(speaker_id, spectr_dir, metadata_dir, encoder_ckp
     embed_dim = config.get("embed_dim", 256)
     len_crop = config.get("len_crop", 128)
     num_uttrs = config.get("num_uttrs", 10)
-    train_test_ratio = config.get("train_test_ratio")
+    train_test_ratio = config.get("train_test_ratio")   # By default test ratio will in half for dev and test
 
     train_metadata_path = os.path.join(metadata_dir, 'train.pkl')
     test_metadata_path = os.path.join(metadata_dir, 'test.pkl')
@@ -61,12 +61,22 @@ def generate_metadata_files_v2(speaker_id, spectr_dir, metadata_dir, encoder_ckp
     num_files = len(spectr_files)
     if train_test_ratio:
         random.shuffle(spectr_files)
-        split_ind = round(num_files * train_test_ratio)
-        data = [('train', spectr_files[:split_ind]), ('test', spectr_files[split_ind:])]
+        train_split_ind = round(num_files * train_test_ratio)
+        val_split_ind = round(num_files * (train_test_ratio + (1 - train_test_ratio) / 2))
+        
+        data = [
+            ('train', spectr_files[:train_split_ind]),
+            ('val', spectr_files[train_split_ind:val_split_ind]),
+            ('test', spectr_files[val_split_ind:])
+        ]
         num_uttrs = math.inf
     else:
-        random_spectr_files = random.sample(spectr_files, 2 * num_uttrs)
-        data = [('train', random_spectr_files[:num_uttrs]), ('test', random_spectr_files[num_uttrs:])]
+        random_spectr_files = random.sample(spectr_files, 3 * num_uttrs)
+        data = [
+            ('train', random_spectr_files[:num_uttrs]),
+            ('val', random_spectr_files[num_uttrs:2*num_uttrs]),
+            ('test', random_spectr_files[2*num_uttrs:])
+        ]
 
     # Divide spectrograms into train and test
     for subset in data:
