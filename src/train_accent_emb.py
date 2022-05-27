@@ -38,12 +38,10 @@ def main(config):
 
     # Data loader.
     accent_data_train = get_loader(root_dir=config.data_dir, dataset="accents", batch_size=config.batch_size, len_crop=config.len_crop, file_name=config.file_name, mode="train", label_csv=config.label_csv)
-    print("Train Data: ", len(accent_data_train))
 
     accent_data_val = None
     if config.validation_freq > 0:
         accent_data_val = get_loader(root_dir=config.data_dir, dataset="accents", batch_size=config.batch_size, len_crop=config.len_crop, file_name=config.file_name, mode="val", label_csv=config.label_csv)
-        print("Valdation Data: ", len(accent_data_train))
     
     solver = AccentEmbSolver(accent_data_train, config, accent_data_val)
 
