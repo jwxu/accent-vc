@@ -4,7 +4,6 @@ import numpy as np
 import pickle 
 import os   
 import csv  
-from multiprocessing import Process, Manager   
 
 
 class Accents(data.Dataset):
@@ -23,38 +22,38 @@ class Accents(data.Dataset):
             metaname = os.path.join(self.root_dir, "val.pkl")
         
         meta = pickle.load(open(metaname, "rb"))
-        
-        """Load data using multiprocessing"""
-        manager = Manager()
-        meta = manager.list(meta)
-        dataset = manager.list(len(meta)*[None])  
-        processes = []
-        for i in range(0, len(meta), self.step):
-            p = Process(target=self.load_data, 
-                        args=(meta[i:i+self.step],dataset,i))  
-            p.start()
-            processes.append(p)
-        for p in processes:
-            p.join()
-            
-        self.train_dataset = list(dataset)
+                    
+        self.train_dataset = self.load_data(meta)
         self.num_tokens = len(self.train_dataset)
+        print("Number of " + mode + " samples: ", self.num_tokens)
 
         self.index_dict, self.labels = self.make_index_dict(label_csv)
         self.label_num = len(self.labels)
         
         print('Finished loading the dataset...')
-        
-        
-    def load_data(self, submeta, dataset, idx_offset):  
-        for k, sbmt in enumerate(submeta):    
-            uttrs = len(sbmt)*[None]
-            for j, tmp in enumerate(sbmt):
-                if j < 2:  # fill in speaker id and embedding
-                    uttrs[j] = tmp
-                else: # load the mel-spectrograms
-                    uttrs[j] = np.load(os.path.join(self.root_dir, tmp))
-            dataset[idx_offset+k] = uttrs
+    
+
+    def load_data(self, meta):
+        """
+        Meta is in the form of [
+            [speaker_1, speaker_1_emb, melspec_path_1, melspec_path_2, ...], 
+            [speaker_2, speaker_2_emb, melspec_path_1, melspec_path_2, ...],
+            ...]
+
+        Loads data in the form of [
+            [speaker_1, melspec_1], 
+            [speaker_1, melspec_2], 
+            ...]
+        """
+        speaker_utt_data = []
+        for i, speaker_info in enumerate(meta):
+            speaker_id = speaker_info[0]
+            for j, utterance in enumerate(speaker_info):
+                if j >= 2: # indices 0 and 1 are speaker id and speaker embedding
+                    melspec = np.load(os.path.join(self.root_dir, utterance))
+                    speaker_utt_data.append([speaker_id, melspec])
+
+        return speaker_utt_data
     
 
     def make_index_dict(self, label_csv):
@@ -78,11 +77,8 @@ class Accents(data.Dataset):
         labels[int(self.index_dict[speaker_id.lower()])] = 1.0
         labels = torch.FloatTensor(labels)
 
-        speaker_emb = uttr_data[1]
-        
-        # pick random uttr with random crop
-        a = np.random.randint(2, len(uttr_data))
-        uttr_raw = uttr_data[a]
+        # Generate input utterance
+        uttr_raw = uttr_data[1]
         if uttr_raw.shape[0] < self.len_crop:
             len_pad = self.len_crop - uttr_raw.shape[0]
             uttr = np.pad(uttr_raw, ((0,len_pad),(0,0)), 'constant')
