@@ -170,20 +170,21 @@ class AccentEmbSolver(object):
         self.model.eval()
 
         eval_metrics = defaultdict(list)
-        for i, (data, labels) in enumerate(self.val_data):
-            data = data.to(self.device)
-            labels = labels.to(self.device)  
-                                                    
-            output = self.model(data)
+        with torch.no_grad():
+            for i, (data, labels) in enumerate(self.val_data):
+                data = data.to(self.device)
+                labels = labels.to(self.device)  
+                                                        
+                output = self.model(data)
 
-            # Loss
-            criterion = torch.nn.BCEWithLogitsLoss()
-            loss = criterion(output, labels)
-            acc = get_accuracy(output, labels)
+                # Loss
+                criterion = torch.nn.BCEWithLogitsLoss()
+                loss = criterion(output, labels)
+                acc = get_accuracy(output, labels)
 
-            # Logging
-            eval_metrics['CE_Loss'].append(loss.item())
-            eval_metrics['Acc'].append(acc)
+                # Logging
+                eval_metrics['CE_Loss'].append(loss.item())
+                eval_metrics['Acc'].append(acc)
         
         self.print_and_log(eval_metrics, total_steps=total_steps)
 
