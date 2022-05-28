@@ -157,6 +157,7 @@ class AccentEmbSolver(object):
             # Validate
             if self.validation_freq > 0 and (epoch % self.validation_freq) == 0:
                 self.validate(total_steps)
+                self.model.train()
         
         checkpoint_path = os.path.join(self.checkpoint_path, 'accentemb.ckpt')
         print("Saving checkpoint to ", checkpoint_path)
