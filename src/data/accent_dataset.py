@@ -23,18 +23,15 @@ class Accents(data.Dataset):
             metaname = os.path.join(self.root_dir, "val.pkl")
         
         meta = pickle.load(open(metaname, "rb"))
+
+        # Create dictionary to map speaker to accent
+        self.speaker_accent_dict, self.labels = self.make_speaker_accent_dict(label_csv)
                     
         self.train_dataset = self.load_data(meta)
-        random.shuffle(self.train_dataset)
-        
-        self.num_tokens = len(self.train_dataset)
-        print("Number of " + mode + " samples: ", self.num_tokens)
 
-        self.index_dict, self.labels = self.make_index_dict(label_csv)
-        self.label_num = len(self.labels)
-        
-        print('Finished loading the dataset...')
-    
+        self.num_tokens = len(self.train_dataset)
+        print("Finished loading the dataset... Number of " + mode + " samples: ", self.num_tokens)        
+
 
     def load_data(self, meta):
         """
@@ -44,22 +41,23 @@ class Accents(data.Dataset):
             ...]
 
         Loads data in the form of [
-            [speaker_1, melspec_1], 
-            [speaker_1, melspec_2], 
+            [speaker_1, melspec_1, accent_id], 
+            [speaker_1, melspec_2, accent_id], 
             ...]
         """
         speaker_utt_data = []
         for i, speaker_info in enumerate(meta):
             speaker_id = speaker_info[0]
+            accent_id = self.speaker_accent_dict[speaker_id.lower()]
             for j, utterance in enumerate(speaker_info):
                 if j >= 2: # indices 0 and 1 are speaker id and speaker embedding
                     melspec = np.load(os.path.join(self.root_dir, utterance))
-                    speaker_utt_data.append([speaker_id, melspec])
+                    speaker_utt_data.append([speaker_id, melspec, accent_id])
 
         return speaker_utt_data
     
 
-    def make_index_dict(self, label_csv):
+    def make_speaker_accent_dict(self, label_csv):
         speaker_accent_lookup = {}
         labels = set()
         with open(label_csv, 'r') as f:
@@ -71,14 +69,10 @@ class Accents(data.Dataset):
                    
         
     def __getitem__(self, index):
-        dataset = self.train_dataset 
-        uttr_data = dataset[index]
-
-        # Generate labels
-        speaker_id = uttr_data[0]
-        labels = np.zeros(self.label_num)
-        labels[int(self.index_dict[speaker_id.lower()])] = 1.0
-        labels = torch.FloatTensor(labels)
+        """
+        Dataset in form [speaker_id, utterance, accent_id]
+        """
+        uttr_data = self.train_dataset[index]
 
         # Generate input utterance
         uttr_raw = uttr_data[1]
@@ -91,9 +85,11 @@ class Accents(data.Dataset):
         else:
             uttr = uttr_raw
         
-        return uttr, labels
+        label = torch.tensor(uttr_data[2], dtype=torch.long)
+        
+        return uttr, label
     
 
     def __len__(self):
-        """Return the number of spkrs."""
+        """Return the number of samples."""
         return self.num_tokens

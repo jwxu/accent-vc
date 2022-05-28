@@ -91,9 +91,9 @@ class AccentEmbSolver(object):
             et = time.time() - start_time
             et = str(datetime.timedelta(seconds=et))[:-7]
             if total_steps is not None:
-                log = "Elapsed [{}], Epoch [{}/{}][{}]".format(et, epoch, self.epochs, total_steps)
+                log = "Elapsed [{}], Epoch [{}/{}][{}], ".format(et, epoch, self.epochs, total_steps)
             else:
-                log = "Elapsed [{}], Epoch [{}/{}]".format(et, epoch, self.epochs)
+                log = "Elapsed [{}], Epoch [{}/{}], ".format(et, epoch, self.epochs)
 
         stage = "Train" if epoch is not None else "Validation"
         label = "Step" if total_steps is not None else "Epoch"
@@ -101,7 +101,7 @@ class AccentEmbSolver(object):
         log_dict = {}
         for tag in loss.keys():
             avg_loss = sum(loss[tag]) / len(loss[tag])
-            log += ", {}: {:.4f}".format(tag, avg_loss)
+            log += "{}: {:.4f}, ".format(tag, avg_loss)
             log_dict[stage + "/" + tag + "/" + label] = avg_loss
         print(log)
 
@@ -130,11 +130,11 @@ class AccentEmbSolver(object):
                 data = data.to(self.device)
                 labels = labels.to(self.device)  
                                                         
-                output = self.model(data)
+                probs = self.model(data)
 
                 # Loss
-                criterion = torch.nn.BCEWithLogitsLoss()
-                loss = criterion(output, labels)
+                nll_loss = torch.nn.NLLLoss()
+                loss = nll_loss(probs, labels)
 
                 self.optimizer.zero_grad()
                 loss.backward()
@@ -176,17 +176,19 @@ class AccentEmbSolver(object):
                 data = data.to(self.device)
                 labels = labels.to(self.device)  
                                                         
-                output = self.model(data)
+                probs = self.model(data)
 
                 # Loss
-                criterion = torch.nn.BCEWithLogitsLoss()
-                loss = criterion(output, labels)
-                acc = get_accuracy(output, labels)
+                nll_loss = torch.nn.NLLLoss()
+                loss = nll_loss(probs, labels)
+
+                pred = torch.argmax(probs, dim=1)
+                acc = (pred == labels).float().mean()
 
                 # Logging
                 eval_metrics['CE_Loss'].append(loss.item())
-                eval_metrics['Acc'].append(acc)
-        
+                eval_metrics['Acc'].append(acc.item())
+
         self.print_and_log(eval_metrics, total_steps=total_steps)
 
         # Save the model that achieves the smallest validation error
