@@ -1,4 +1,4 @@
 wavenet_vocoder==0.1.1
 wandb==0.12.16
-gdown==6.2.0
+gdown==4.4.0
 librosa==0.9.1

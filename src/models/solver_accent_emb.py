@@ -52,13 +52,13 @@ class AccentEmbSolver(object):
             checkpoint = torch.load(self.checkpoint, map_location=torch.device(self.device))
             
             if 'model_accent' in checkpoint.keys():
-                self.model.load_state_dict(checkpoint['model_b'])
+                self.model.load_state_dict(checkpoint['model_b'], strict=False)
             else:
                 new_state_dict = OrderedDict()
                 for key, val in checkpoint['model_b'].items():
                     new_key = key[7:]
                     new_state_dict[new_key] = val
-                self.model.load_state_dict(new_state_dict)
+                self.model.load_state_dict(new_state_dict, strict=False)
         
         self.model.to(self.device)
         
@@ -116,8 +116,6 @@ class AccentEmbSolver(object):
     
             
     def train(self):
-        self.model.train()
-
         # Start training.
         print('Start training...')
         self.best_err = float("inf")
@@ -125,18 +123,19 @@ class AccentEmbSolver(object):
         batch_loss = defaultdict(list)
         start_time = time.time()
         for epoch in range(self.epochs + 1):
+            self.model.train()
             epoch_loss = defaultdict(list)
             for i, (data, labels) in enumerate(self.train_data):
                 data = data.to(self.device)
-                labels = labels.to(self.device)  
-                                                        
+                labels = labels.to(self.device)
+
+                self.optimizer.zero_grad()   
                 probs = self.model(data)
 
                 # Loss
                 nll_loss = torch.nn.NLLLoss()
                 loss = nll_loss(probs, labels)
-
-                self.optimizer.zero_grad()
+                 
                 loss.backward()
                 self.optimizer.step()
 
@@ -157,7 +156,6 @@ class AccentEmbSolver(object):
             # Validate
             if self.validation_freq > 0 and (epoch % self.validation_freq) == 0:
                 self.validate(total_steps)
-                self.model.train()
         
         checkpoint_path = os.path.join(self.checkpoint_path, 'accentemb.ckpt')
         print("Saving checkpoint to ", checkpoint_path)
