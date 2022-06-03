@@ -6,6 +6,7 @@ import time
 import datetime
 import wandb
 import json
+import re
 from tqdm import tqdm
 
 
@@ -25,6 +26,7 @@ class Solver(object):
         self.dim_emb = config.dim_emb
         self.dim_pre = config.dim_pre
         self.freq = config.freq
+        self.use_accent = config.use_accent
 
         # Training configurations.
         self.batch_size = config.batch_size
@@ -47,7 +49,8 @@ class Solver(object):
             
     def build_model(self):
         
-        self.G = Generator(self.dim_neck, self.dim_emb, self.dim_pre, self.freq)      
+        self.G = Generator(self.dim_neck, self.dim_emb, self.dim_pre, self.freq, self.use_accent)
+        print(self.G.state_dict().keys())
         
         self.g_optimizer = torch.optim.Adam(self.G.parameters(), 0.0001)
         
@@ -56,7 +59,36 @@ class Solver(object):
         if self.checkpoint:
             print("Loading checkpoint...")
             g_checkpoint = torch.load(self.checkpoint, map_location=torch.device(self.device))
-            self.G.load_state_dict(g_checkpoint['model'])
+            if self.use_accent:
+                if 'model_accent' in g_checkpoint.keys():
+                    self.G.load_state_dict(g_checkpoint['model_accent'])
+                else:
+                    # Shift all convolution weights up by one to account for new conv layer
+                    conv_layer_re = re.compile('encoder\.convolutions\.(\d)\.(\d)\.conv\.(.*)')
+                    batch_re = re.compile('encoder\.convolutions\.(\d)\.(\d)\.(.*)')
+                    new_state_dict = {}
+                    for key, item in g_checkpoint['model'].items():
+                        conv_layer_m = conv_layer_re.search(key)
+                        batch_m = batch_re.search(key)
+                        if conv_layer_m:
+                            first = int(conv_layer_m.group(1)) + 1
+                            second = int(conv_layer_m.group(2))
+                            param = conv_layer_m.group(3)
+                            print(f'encoder.convolutions.{first}.{second}.conv.{param}')
+                            new_state_dict[f'encoder.convolutions.{first}.{second}.conv.{param}'] = item
+                        elif batch_m:
+                            first = int(batch_m.group(1)) + 1
+                            second = int(batch_m.group(2))
+                            param = batch_m.group(3)
+                            print(f'encoder.convolutions.{first}.{second}.{param}')
+                            new_state_dict[f'encoder.convolutions.{first}.{second}.{param}'] = item
+                        else:
+                            print('Default: ', key)
+                            new_state_dict[key] = item
+                    print(new_state_dict.keys())
+                    self.G.load_state_dict(new_state_dict, strict=False)
+            else:
+                self.G.load_state_dict(g_checkpoint['model'])
         
 
     def reset_grad(self):
@@ -173,6 +205,8 @@ class Solver(object):
         
         checkpoint_path = os.path.join(checkpoint_path, 'accentvc.ckpt')
         print("Saving checkpoint to ", checkpoint_path)
-        torch.save({'model': self.G.state_dict()}, checkpoint_path)
-                
+        if self.use_accent:
+            torch.save({'model_accent': self.G.state_dict()}, checkpoint_path)
+        else:
+            torch.save({'model': self.G.state_dict()}, checkpoint_path)
 

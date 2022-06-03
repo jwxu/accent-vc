@@ -19,6 +19,9 @@ def get_arg_parse():
     parser.add_argument('--num_utterances', type=int, default=20, help="Number of utterances to use for train")
     parser.add_argument('--encoder_ckpt', type=str, required=False,
                 default="dataset/trained_models/3000000-BL.ckpt", help="Path to embedding encoder for MEL spectogram")
+    parser.add_argument('--use_accent', action='store_true')
+    parser.add_argument('--accent_encoder_ckpt', type=str, required=False,
+                default="dataset/trained_models/accentemb.ckpt", help="Path to embedding encoder for MEL spectogram")
     args = parser.parse_args()
     return args
 
@@ -93,6 +96,9 @@ def _process_data(arctic_data_name, arctic_dir, args):
     train_test_ratio = args.train_test_ratio
     encoder_path = args.encoder_ckpt
 
+    #accent_encoder_path = args.accent_encoder_ckpt
+    accent_encoder_path = args.accent_encoder_ckpt if args.use_accent else None
+
     # If the encoder does not exist, and the default is being used, download it
     if not os.path.isfile(encoder_path) and '3000000-BL.ckpt' in encoder_path:
         print(f"No encoder model found. Downloading encoder used by AutoVC from Google Drive")
@@ -116,11 +122,13 @@ def _process_data(arctic_data_name, arctic_dir, args):
     # Produce spectrograms
     # L2-Arctic uses 44.1 kHz sampling rate according to:
     # https://psi.engr.tamu.edu/wp-content/uploads/2018/08/zhao2018interspeech.pdf
-    generate_spectrogram_v2(wav_dir, spectr_dir, {'sr': 44100})
+    # but we need to read with 16k in accordance with AutoVC model and the output
+    # should be sampled at 44.1 kHz
+    generate_spectrogram_v2(wav_dir, spectr_dir, {'sr': 16000})
 
     # Generate metadata files from spectrograms (train)
     metadata_config = {'num_uttrs': num_utterances, 'train_test_ratio': train_test_ratio}
-    generate_metadata_files_v2(arctic_data_name, spectr_dir, autovc_meta_dir, encoder_path, metadata_config)
+    generate_metadata_files_v2(arctic_data_name, spectr_dir, autovc_meta_dir, encoder_path, accent_encoder_path, metadata_config)
 
 
 if __name__ == "__main__":

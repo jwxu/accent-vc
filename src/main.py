@@ -17,6 +17,7 @@ def get_arg_parse():
     parser.add_argument('--dim_emb', type=int, default=256)
     parser.add_argument('--dim_pre', type=int, default=512)
     parser.add_argument('--freq', type=int, default=32)
+    parser.add_argument('--use_accent', type=bool, default=False)
     
     # Training configuration.
     parser.add_argument('--data_dir', type=str, default='dataset/spmel')

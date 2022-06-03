@@ -38,6 +38,58 @@ class ConvNorm(torch.nn.Module):
         return conv_signal
 
 
+class EncoderWithAccent(nn.Module):
+    """Encoder module:
+    """
+    def __init__(self, dim_neck, dim_emb, freq):
+        super(EncoderWithAccent, self).__init__()
+        self.dim_neck = dim_neck
+        self.freq = freq
+        
+        convolutions = []
+        for i in range(4):
+            if i == 0:
+                conv_layer = nn.Sequential(
+                    ConvNorm(80+dim_emb,
+                            int(80+dim_emb/2),
+                            kernel_size=5, stride=1,
+                            padding=2,
+                            dilation=1, w_init_gain='relu'),
+                    nn.BatchNorm1d(int(80+dim_emb/2)))
+            else:
+                conv_layer = nn.Sequential(
+                    ConvNorm(int(80+dim_emb/2) if i==1 else 512,
+                            512,
+                            kernel_size=5, stride=1,
+                            padding=2,
+                            dilation=1, w_init_gain='relu'),
+                    nn.BatchNorm1d(512))
+            convolutions.append(conv_layer)
+        self.convolutions = nn.ModuleList(convolutions)
+        
+        self.lstm = nn.LSTM(512, dim_neck, 2, batch_first=True, bidirectional=True)
+
+    def forward(self, x, c_org):
+        x = x.squeeze(1).transpose(2,1)
+        c_org = c_org.unsqueeze(-1).expand(-1, -1, x.size(-1))
+        x = torch.cat((x, c_org), dim=1)
+        
+        for conv in self.convolutions:
+            x = F.relu(conv(x))
+        x = x.transpose(1, 2)
+        
+        self.lstm.flatten_parameters()
+        outputs, _ = self.lstm(x)
+        out_forward = outputs[:, :, :self.dim_neck]
+        out_backward = outputs[:, :, self.dim_neck:]
+        
+        codes = []
+        for i in range(0, outputs.size(1), self.freq):
+            codes.append(torch.cat((out_forward[:,i+self.freq-1,:],out_backward[:,i,:]), dim=-1))
+
+        return codes
+
+
 class Encoder(nn.Module):
     """Encoder module:
     """
@@ -49,11 +101,11 @@ class Encoder(nn.Module):
         convolutions = []
         for i in range(3):
             conv_layer = nn.Sequential(
-                ConvNorm(80+dim_emb if i==0 else 512,
-                         512,
-                         kernel_size=5, stride=1,
-                         padding=2,
-                         dilation=1, w_init_gain='relu'),
+                ConvNorm(80+dim_emb if i==1 else 512,
+                        512,
+                        kernel_size=5, stride=1,
+                        padding=2,
+                        dilation=1, w_init_gain='relu'),
                 nn.BatchNorm1d(512))
             convolutions.append(conv_layer)
         self.convolutions = nn.ModuleList(convolutions)
@@ -80,6 +132,48 @@ class Encoder(nn.Module):
 
         return codes
       
+class DecoderWithAccent(nn.Module):
+    """Decoder module:
+    """
+    def __init__(self, dim_neck, dim_emb, dim_pre):
+        super(DecoderWithAccent, self).__init__()
+        
+        self.lstm0 = nn.LSTM(dim_neck*2+dim_emb, int(dim_neck*2+dim_emb/2), 1, batch_first=True)
+        self.lstm1 = nn.LSTM(int(dim_neck*2+dim_emb/2), dim_pre, 1, batch_first=True)
+ 
+        convolutions = []
+        for i in range(3):
+            conv_layer = nn.Sequential(
+                ConvNorm(dim_pre,
+                         dim_pre,
+                         kernel_size=5, stride=1,
+                         padding=2,
+                         dilation=1, w_init_gain='relu'),
+                nn.BatchNorm1d(dim_pre))
+            convolutions.append(conv_layer)
+        self.convolutions = nn.ModuleList(convolutions)
+        
+        self.lstm2 = nn.LSTM(dim_pre, 1024, 2, batch_first=True)
+        
+        self.linear_projection = LinearNorm(1024, 80)
+
+    def forward(self, x):
+        
+        #self.lstm1.flatten_parameters()
+        x, _ = self.lstm0(x)
+        x, _ = self.lstm1(x)
+        x = x.transpose(1, 2)
+        
+        for conv in self.convolutions:
+            x = F.relu(conv(x))
+        x = x.transpose(1, 2)
+        
+        outputs, _ = self.lstm2(x)
+        
+        decoder_output = self.linear_projection(outputs)
+
+        return decoder_output   
+
         
 class Decoder(nn.Module):
     """Decoder module:
@@ -171,11 +265,16 @@ class Postnet(nn.Module):
 
 class Generator(nn.Module):
     """Generator network."""
-    def __init__(self, dim_neck, dim_emb, dim_pre, freq):
+    def __init__(self, dim_neck, dim_emb, dim_pre, freq, use_accent=False):
         super(Generator, self).__init__()
-        
-        self.encoder = Encoder(dim_neck, dim_emb, freq)
-        self.decoder = Decoder(dim_neck, dim_emb, dim_pre)
+
+        if use_accent:
+            self.encoder = EncoderWithAccent(dim_neck, dim_emb, freq)
+            self.decoder = DecoderWithAccent(dim_neck, dim_emb, dim_pre)
+        else:
+            self.encoder = Encoder(dim_neck, dim_emb, freq)
+            self.decoder = Decoder(dim_neck, dim_emb, dim_pre)
+
         self.postnet = Postnet()
 
     def forward(self, x, c_org, c_trg):

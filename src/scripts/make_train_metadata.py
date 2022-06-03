@@ -13,7 +13,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-from src.models.model_bl import D_VECTOR
+from src.models.model_bl import D_VECTOR, D_ACCENT_VECTOR
 
 random.seed(12345)
 
@@ -31,7 +31,7 @@ def get_arg_parse():
     return args
 
 
-def generate_metadata_files_v2(speaker_id, spectr_dir, metadata_dir, encoder_ckpt, config={}):
+def generate_metadata_files_v2(speaker_id, spectr_dir, metadata_dir, encoder_ckpt, accent_encoder_ckpt, config={}):
     print(f"Generating metadata for {speaker_id}")
     name_re = re.compile("arctic_(\w)(\d{4})\.npy")
 
@@ -55,6 +55,14 @@ def generate_metadata_files_v2(speaker_id, spectr_dir, metadata_dir, encoder_ckp
         new_key = key[7:]
         new_state_dict[new_key] = val
     C.load_state_dict(new_state_dict)
+
+    if accent_encoder_ckpt:
+        A = D_ACCENT_VECTOR(dim_input=input_dim, dim_cell=cell_dim, dim_emb=embed_dim).eval().cuda()
+        a_checkpoint = torch.load(accent_encoder_ckpt)
+        new_state_dict = OrderedDict()
+        for key, val in a_checkpoint['model_accent'].items():
+            new_state_dict[key] = val
+        A.load_state_dict(new_state_dict)
 
     # Split data into train and test
     spectr_files = os.listdir(spectr_dir)
@@ -98,11 +106,16 @@ def generate_metadata_files_v2(speaker_id, spectr_dir, metadata_dir, encoder_ckp
 
             left = np.random.randint(0, spectrogram.shape[0] - len_crop)
             mel_spectrogram = torch.from_numpy(spectrogram[np.newaxis, left:left+len_crop, :]).cuda()
-            embedding = C(mel_spectrogram)
-            embeddings.append(embedding.detach().squeeze().cpu().numpy())
+            style_embedding = C(mel_spectrogram)
+            if accent_encoder_ckpt:
+                accent_embedding = A(mel_spectrogram)
+                combined_embedding = np.concatenate((style_embedding.detach().squeeze().cpu().numpy(), accent_embedding.detach().squeeze().cpu().numpy()))
+            else:
+                combined_embedding = style_embedding.detach().squeeze().cpu().numpy()
+            embeddings.append(combined_embedding)
             if dataset_type == "test":
                 spectrogram_list.append(spectrogram)
-                files.append(embedding.detach().squeeze().cpu().numpy())
+                files.append(combined_embedding)
                 aux_paths.append(partial_spectr_path)
             else:
                 files.append(partial_spectr_path)

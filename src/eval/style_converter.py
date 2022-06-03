@@ -36,10 +36,15 @@ def run_style_converter(data_path, model_checkpoint, output_filepath):
     Pickle file should be in formate (speaker_id, speech embedding, speech spectrogram)
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    G = Generator(32,256,512,32).eval().to(device)
 
     g_checkpoint = torch.load(model_checkpoint, map_location=torch.device(device))
-    G.load_state_dict(g_checkpoint['model'])
+    # If its an accent model, load accent checkpoint
+    if 'model_accent' in g_checkpoint:
+        G = Generator(32,512,512,32, use_accent=True).eval().to(device)
+        G.load_state_dict(g_checkpoint['model_accent'])
+    else:
+        G = Generator(32,256,512,32).eval().to(device)
+        G.load_state_dict(g_checkpoint['model'])
 
     metadata = pickle.load(open(data_path, "rb"))
 
@@ -48,6 +53,9 @@ def run_style_converter(data_path, model_checkpoint, output_filepath):
     for data_i in metadata:
                 
         spect_org = data_i[2]
+        # Just pick the first spect_org
+        if isinstance(spect_org, list):
+            spect_org = spect_org[0]
         spect_org, len_pad = pad_seq(spect_org)
         uttr_org = torch.from_numpy(spect_org[np.newaxis, :, :]).to(device)
         emb_org = torch.from_numpy(data_i[1][np.newaxis, :]).to(device)
