@@ -101,7 +101,7 @@ class Encoder(nn.Module):
         convolutions = []
         for i in range(3):
             conv_layer = nn.Sequential(
-                ConvNorm(80+dim_emb if i==1 else 512,
+                ConvNorm(80+dim_emb if i==0 else 512,
                         512,
                         kernel_size=5, stride=1,
                         padding=2,
@@ -138,7 +138,8 @@ class DecoderWithAccent(nn.Module):
     def __init__(self, dim_neck, dim_emb, dim_pre):
         super(DecoderWithAccent, self).__init__()
         
-        self.lstm0 = nn.LSTM(dim_neck*2+dim_emb, int(dim_neck*2+dim_emb/2), 1, batch_first=True)
+        #self.lstm0 = nn.LSTM(dim_neck*2+dim_emb, int(dim_neck*2+dim_emb/2), 1, batch_first=True)
+        self.lin = LinearNorm(dim_neck*2+dim_emb, int(dim_neck*2+dim_emb/2))
         self.lstm1 = nn.LSTM(int(dim_neck*2+dim_emb/2), dim_pre, 1, batch_first=True)
  
         convolutions = []
@@ -160,7 +161,8 @@ class DecoderWithAccent(nn.Module):
     def forward(self, x):
         
         #self.lstm1.flatten_parameters()
-        x, _ = self.lstm0(x)
+        #x, _ = self.lstm0(x)
+        x = F.relu(self.lin(x))
         x, _ = self.lstm1(x)
         x = x.transpose(1, 2)
         

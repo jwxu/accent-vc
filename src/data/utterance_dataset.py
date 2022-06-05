@@ -6,15 +6,17 @@ import os
        
 from multiprocessing import Process, Manager   
 
+np.random.seed(1)
 
 class Utterances(data.Dataset):
     """Dataset class for the Utterances dataset."""
 
-    def __init__(self, root_dir, file_name, len_crop):
+    def __init__(self, root_dir, file_name, len_crop, use_accent=False):
         """Initialize and preprocess the Utterances dataset."""
         self.root_dir = root_dir
         self.file_name = file_name
         self.len_crop = len_crop
+        self.use_accent = use_accent
         self.step = 10
         
         metaname = os.path.join(self.root_dir, file_name)
@@ -67,6 +69,9 @@ class Utterances(data.Dataset):
             uttr = tmp[left:left+self.len_crop, :]
         else:
             uttr = tmp
+
+        if not self.use_accent:
+            emb_org = np.split(emb_org, 2)[0]
         
         return uttr, emb_org
     

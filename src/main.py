@@ -33,6 +33,7 @@ def get_arg_parse():
     parser.add_argument('--wandb', default=None, type=str, help="Wandb project name")
     parser.add_argument('--wandb_json', default=None, type=str, 
                         help="File path to wandb config json file")
+    parser.add_argument('--eval', action='store_true')
 
     args = parser.parse_args()
     return args
@@ -43,11 +44,14 @@ def main(config):
     cudnn.benchmark = True
 
     # Data loader.
-    vcc_loader = get_loader(root_dir=config.data_dir, dataset="utterances", batch_size=config.batch_size, len_crop=config.len_crop, file_name=config.file_name)
+    vcc_loader = get_loader(root_dir=config.data_dir, dataset="utterances", batch_size=config.batch_size, len_crop=config.len_crop, file_name=config.file_name, use_accent=config.use_accent)
     
     solver = Solver(vcc_loader, config)
 
-    solver.train()
+    if config.eval:
+        solver.test()
+    else:
+        solver.train()
              
 
 if __name__ == '__main__':

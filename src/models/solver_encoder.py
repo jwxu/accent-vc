@@ -49,8 +49,7 @@ class Solver(object):
             
     def build_model(self):
         
-        self.G = Generator(self.dim_neck, self.dim_emb, self.dim_pre, self.freq, self.use_accent)
-        print(self.G.state_dict().keys())
+        self.G = Generator(self.dim_neck, self.dim_emb, self.dim_pre, self.freq, use_accent=self.use_accent)
         
         self.g_optimizer = torch.optim.Adam(self.G.parameters(), 0.0001)
         
@@ -74,18 +73,14 @@ class Solver(object):
                             first = int(conv_layer_m.group(1)) + 1
                             second = int(conv_layer_m.group(2))
                             param = conv_layer_m.group(3)
-                            print(f'encoder.convolutions.{first}.{second}.conv.{param}')
                             new_state_dict[f'encoder.convolutions.{first}.{second}.conv.{param}'] = item
                         elif batch_m:
                             first = int(batch_m.group(1)) + 1
                             second = int(batch_m.group(2))
                             param = batch_m.group(3)
-                            print(f'encoder.convolutions.{first}.{second}.{param}')
                             new_state_dict[f'encoder.convolutions.{first}.{second}.{param}'] = item
                         else:
-                            print('Default: ', key)
                             new_state_dict[key] = item
-                    print(new_state_dict.keys())
                     self.G.load_state_dict(new_state_dict, strict=False)
             else:
                 self.G.load_state_dict(g_checkpoint['model'])
@@ -110,6 +105,67 @@ class Solver(object):
     
     #=====================================================================================================================================#
     
+    def test(self):
+        # Set data loader.
+        data_loader = self.vcc_loader
+
+        # Print logs in specified order
+        keys = ['G/loss_id','G/loss_id_psnt','G/loss_cd']
+
+        print('Start eval...')
+        start_time = time.time()
+        avg_loss = {
+            'G/loss': 0,
+            'G/loss_id': 0,
+            'G/loss_id_psnt': 0,
+            'G/loss_cd': 0,
+            'count': 0
+        }
+
+        try:
+            data_iter = iter(data_loader)
+            while True:
+                x_real, emb_org = next(data_iter)
+                x_real = x_real.to(self.device) 
+                emb_org = emb_org.to(self.device) 
+                self.G = self.G.eval()
+
+                x_identic, x_identic_psnt, code_real = self.G(x_real, emb_org, emb_org)
+                x_identic = x_identic.squeeze(1)
+                x_identic_psnt = x_identic_psnt.squeeze(1)
+                g_loss_id = F.mse_loss(x_real, x_identic)   
+                g_loss_id_psnt = F.mse_loss(x_real, x_identic_psnt)   
+                
+                # Code semantic loss.
+                code_reconst = self.G(x_identic_psnt, emb_org, None)
+                g_loss_cd = F.l1_loss(code_real, code_reconst)
+
+
+                # Backward and optimize.
+                g_loss = g_loss_id + g_loss_id_psnt + self.lambda_cd * g_loss_cd
+
+                # Logging.
+                loss = {}
+                loss['G/loss_id'] = g_loss_id.item()
+                loss['G/loss_id_psnt'] = g_loss_id_psnt.item()
+                loss['G/loss_cd'] = g_loss_cd.item()
+                avg_loss['G/loss'] += g_loss.item()
+                avg_loss['G/loss_id'] += g_loss_id.item()
+                avg_loss['G/loss_id_psnt'] += g_loss_id_psnt.item()
+                avg_loss['G/loss_cd'] += g_loss_cd.item()
+                avg_loss['count'] += 1
+
+        except Exception as e:
+            # After all items have been evaluated, return
+            print(f'Exiting because of {e}')
+
+        print(f"Avg loss metrics on {avg_loss['count']} samples")
+        avg_loss['G/loss'] /= avg_loss['count']
+        avg_loss['G/loss_id'] /= avg_loss['count']
+        avg_loss['G/loss_id_psnt'] /= avg_loss['count']
+        avg_loss['G/loss_cd'] /= avg_loss['count']
+        print(avg_loss)
+        
             
     def train(self):
         # Set data loader.
